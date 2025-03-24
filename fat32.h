@@ -44,16 +44,15 @@ struct FAT32DirectoryEntry
 {
   uint8_t name[11];
   uint8_t attributes;
-  uint8_t nt_reserved;
-  uint8_t creation_time_tenths;
-  uint16_t creation_time;
-  uint16_t creation_date;
-  uint16_t last_access_date;
-  uint16_t first_cluster_high;
-  uint16_t last_write_time;
-  uint16_t last_write_date;
-  uint16_t first_cluster_low;
-  uint32_t file_size;
+  uint8_t reserved;
+  uint8_t creationTime[3];
+  uint16_t creationDate;
+  uint16_t lastAccessedDate;
+  uint16_t firstClusterHigh;
+  uint16_t lastWrittenTime;
+  uint16_t lastWrittenDate;
+  uint16_t firstClusterLow;
+  uint32_t fileSize;
 };
 
 class FAT32Reader

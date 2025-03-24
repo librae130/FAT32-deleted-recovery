@@ -120,7 +120,7 @@ void FAT32Reader::listRootDirectoryDeletedEntries()
     {
       if (entry.name[0] == 0xE5)
       {
-        std::string name(reinterpret_cast<const char *>(entry.name + 1), 10); // Skip the first byte (0xE5)
+        std::string name(reinterpret_cast<const char *>(entry.name + 1), 10);
         std::cout << "Deleted File: " << name << std::endl;
       }
     }
