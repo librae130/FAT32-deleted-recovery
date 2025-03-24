@@ -1,9 +1,21 @@
 #include "fat32.h"
 
-FAT32Reader::FAT32Reader(const std::string_view path)
-    : devicePath(path)
+void FAT32Reader::printBootSectorInfo()
 {
-  device.open(devicePath, std::ios::binary | std::ios::in);
+  std::cout << "OEM Name: " << std::string(bootSector->oemName, bootSector->oemName + sizeof(bootSector->oemName)) << '\n';
+  std::cout << "Bytes Per Sector: " << bootSector->bytesPerSector << '\n';
+  std::cout << "Sectors Per Cluster: " << static_cast<int>(bootSector->sectorsPerCluster) << '\n';
+  std::cout << "Root Dir start: " << bootSector->rootDirStartCluster << '\n';
+  std::cout << "FAT Count: " << static_cast<int>(bootSector->fatCount) << '\n';
+  std::cout << "Total Sectors: " << bootSector->sectorTotal << '\n';
+  std::cout << "Sectors Per FAT: " << bootSector->sectorsPerFat << '\n';
+  std::cout << "Volume ID: " << bootSector->volumeId << '\n';
+  std::cout << "Volume Label: " << std::string(bootSector->volumeLabel, bootSector->volumeLabel + sizeof(bootSector->volumeLabel)) << '\n';
+}
+
+FAT32Reader::FAT32Reader(const std::string_view path)
+    : devicePath{path}
+{
   read(devicePath);
 }
 
@@ -26,21 +38,22 @@ bool FAT32Reader::validate()
 
 bool FAT32Reader::read(const std::string_view path)
 {
+  devicePath = path;
   device.open(devicePath, std::ios::binary | std::ios::in);
   if (!device.is_open())
   {
     std::cerr << "Failed to open: " << devicePath << std::endl;
     return false;
   }
-  devicePath = path;
   readDeviceBootSector();
   validate();
   readDeviceFatTable();
+  return true;
 }
 bool FAT32Reader::readDeviceBootSector()
 {
   bootSector = std::make_unique<FAT32BootSector>();
-
+  device.seekg(0);
   device.read(reinterpret_cast<char *>(bootSector->jumpBoot), sizeof(bootSector->jumpBoot));
   device.read(reinterpret_cast<char *>(bootSector->oemName), sizeof(bootSector->oemName));
   device.read(reinterpret_cast<char *>(&bootSector->bytesPerSector), sizeof(bootSector->bytesPerSector));
@@ -83,8 +96,9 @@ bool FAT32Reader::readDeviceBootSector()
 bool FAT32Reader::readDeviceFatTable()
 {
   uint32_t fatTableSize{bootSector->sectorsPerFat * bootSector->bytesPerSector};
+  uint32_t fatOffset = bootSector->reservedSectorCount * bootSector->bytesPerSector;
   fatTable.resize(fatTableSize / sizeof(uint32_t));
-  device.seekg(bootSector->reservedSectorCount * bootSector->bytesPerSector);
+  device.seekg(fatOffset);
   device.read(reinterpret_cast<char *>(fatTable.data()), fatTableSize);
 
   if (!device)
@@ -98,9 +112,10 @@ bool FAT32Reader::readDeviceFatTable()
 
 void FAT32Reader::listRootDirectoryDeletedEntries()
 {
+  uint32_t firstDataSector = bootSector->reservedSectorCount + (bootSector->fatCount * bootSector->sectorsPerFat);
   uint32_t currentCluster = bootSector->rootDirStartCluster;
   uint32_t bytesPerCluster = bootSector->bytesPerSector * bootSector->sectorsPerCluster;
-  std::vector<FAT32DirectoryEntry> entries(bytesPerCluster / sizeof(FAT32DirectoryEntry));
+  std::vector<FAT32DirectoryEntry> entries(bytesPerCluster / 32);
 
   while (currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
   {
@@ -110,15 +125,27 @@ void FAT32Reader::listRootDirectoryDeletedEntries()
       continue;
     }
 
-    device.seekg(currentCluster * bytesPerCluster);
-    device.read(reinterpret_cast<char *>(entries.data()), bytesPerCluster);
+    uint32_t currentSector = firstDataSector + (currentCluster - 2) * bootSector->sectorsPerCluster;
+    uint32_t byteOffset = currentSector * bootSector->bytesPerSector;
 
+    device.seekg(byteOffset);
+    device.read(reinterpret_cast<char *>(entries.data()), bytesPerCluster);
+    
     for (const auto &entry : entries)
     {
       if (entry.name[0] == 0xE5)
       {
-        std::string name(reinterpret_cast<const char *>(entry.name + 1), 10);
-        std::cout << "Deleted File: " << name << std::endl;
+        char fileName[13] = {0};
+        memcpy(fileName, entry.name + 1, 7);
+
+        if (entry.name[8] != ' ')
+        {
+          fileName[7] = '.';
+          memcpy(fileName + 8, entry.name + 8, 3);
+        }
+
+        std::cout << "Deleted File: " << fileName <<'\n';
+        std::cout << "File Size: " << entry.fileSize << '\n';
       }
     }
 

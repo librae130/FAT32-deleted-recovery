@@ -4,6 +4,8 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <cstring>
 
 // FAT32 Boot Sector structure
 struct FAT32BootSector
@@ -71,7 +73,7 @@ private:
 public:
   FAT32Reader(const std::string_view path);
   ~FAT32Reader();
-
+  void printBootSectorInfo();
   bool read(const std::string_view path);
   void listRootDirectoryDeletedEntries();
   std::vector<uint8_t> read_file(const std::string &filename);
