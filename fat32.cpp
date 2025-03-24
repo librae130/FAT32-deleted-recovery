@@ -1,7 +1,4 @@
 #include "fat32.h"
-#include <iostream>
-#include <iomanip>
-#include <cstring>
 
 FAT32Reader::FAT32Reader(const std::string_view path)
     : devicePath(path)

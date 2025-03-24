@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <string_view>
 #include <vector>
-#include <memory>
 #include <fstream>
+#include <iostream>
 
 // FAT32 Boot Sector structure
 struct FAT32BootSector
