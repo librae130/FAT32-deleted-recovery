@@ -41,6 +41,7 @@ struct FAT32BootSector
   uint8_t bootRecordSignature[2];
 };
 
+#pragma pack(push, 1)
 // FAT32 Directory Entry structure
 struct FAT32DirectoryEntry
 {
@@ -56,8 +57,9 @@ struct FAT32DirectoryEntry
   uint16_t firstClusterLow;
   uint32_t fileSize;
 };
+#pragma pack(pop)
 
-class FAT32Reader
+class Fat32Device
 {
 private:
   std::string devicePath;
@@ -65,16 +67,21 @@ private:
 
   std::unique_ptr<FAT32BootSector> bootSector;
   std::vector<uint32_t> fatTable;
+  std::vector<FAT32DirectoryEntry> deletedEntries{};
 
   bool readDeviceBootSector();
   bool readDeviceFatTable();
-  bool validate();
+  bool isFat32();
+  bool isOutputPathSafe(const std::string &outputPath);
 
 public:
-  FAT32Reader(const std::string_view path);
-  ~FAT32Reader();
+  Fat32Device(const std::string_view path);
+  ~Fat32Device();
   void printBootSectorInfo();
   bool read(const std::string_view path);
-  void listRootDirectoryDeletedEntries();
-  std::vector<uint8_t> read_file(const std::string &filename);
+  const std::vector<FAT32DirectoryEntry> &getDeletedEntries();
+  void printDeletedEntriesConsole();
+  void findDeletedEntries();
+  bool recoverDeletedFile(const FAT32DirectoryEntry &entry, const std::string &outputPath);
+  void recoverAllDeletedFiles(const std::string &outputDir);
 };

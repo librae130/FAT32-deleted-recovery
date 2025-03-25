@@ -1,11 +1,11 @@
 #include "fat32.h"
 
-void FAT32Reader::printBootSectorInfo()
+void Fat32Device::printBootSectorInfo()
 {
   std::cout << "OEM Name: " << std::string(bootSector->oemName, bootSector->oemName + sizeof(bootSector->oemName)) << '\n';
   std::cout << "Bytes Per Sector: " << bootSector->bytesPerSector << '\n';
   std::cout << "Sectors Per Cluster: " << static_cast<int>(bootSector->sectorsPerCluster) << '\n';
-  std::cout << "Root Dir start: " << bootSector->rootDirStartCluster << '\n';
+  std::cout << "Root Dir Start Cluster: " << bootSector->rootDirStartCluster << '\n';
   std::cout << "FAT Count: " << static_cast<int>(bootSector->fatCount) << '\n';
   std::cout << "Total Sectors: " << bootSector->sectorTotal << '\n';
   std::cout << "Sectors Per FAT: " << bootSector->sectorsPerFat << '\n';
@@ -13,19 +13,19 @@ void FAT32Reader::printBootSectorInfo()
   std::cout << "Volume Label: " << std::string(bootSector->volumeLabel, bootSector->volumeLabel + sizeof(bootSector->volumeLabel)) << '\n';
 }
 
-FAT32Reader::FAT32Reader(const std::string_view path)
+Fat32Device::Fat32Device(const std::string_view path)
     : devicePath{path}
 {
   read(devicePath);
 }
 
-FAT32Reader::~FAT32Reader()
+Fat32Device::~Fat32Device()
 {
   if (device.is_open())
     device.close();
 }
 
-bool FAT32Reader::validate()
+bool Fat32Device::isFat32()
 {
   if (std::string_view(reinterpret_cast<char *>(bootSector->fatName)) != "FAT32   ")
   {
@@ -36,7 +36,7 @@ bool FAT32Reader::validate()
   return true;
 }
 
-bool FAT32Reader::read(const std::string_view path)
+bool Fat32Device::read(const std::string_view path)
 {
   devicePath = path;
   device.open(devicePath, std::ios::binary | std::ios::in);
@@ -46,11 +46,14 @@ bool FAT32Reader::read(const std::string_view path)
     return false;
   }
   readDeviceBootSector();
-  validate();
+
+  if (!isFat32())
+    return false;
+
   readDeviceFatTable();
   return true;
 }
-bool FAT32Reader::readDeviceBootSector()
+bool Fat32Device::readDeviceBootSector()
 {
   bootSector = std::make_unique<FAT32BootSector>();
   device.seekg(0);
@@ -93,10 +96,10 @@ bool FAT32Reader::readDeviceBootSector()
   return true;
 }
 
-bool FAT32Reader::readDeviceFatTable()
+bool Fat32Device::readDeviceFatTable()
 {
-  uint32_t fatTableSize{bootSector->sectorsPerFat * bootSector->bytesPerSector};
-  uint32_t fatOffset = bootSector->reservedSectorCount * bootSector->bytesPerSector;
+  uint32_t fatTableSize{bootSector->sectorsPerFat * static_cast<uint32_t>(bootSector->bytesPerSector)};
+  uint32_t fatOffset{static_cast<uint32_t>(bootSector->reservedSectorCount) * static_cast<uint32_t>(bootSector->bytesPerSector)};
   fatTable.resize(fatTableSize / sizeof(uint32_t));
   device.seekg(fatOffset);
   device.read(reinterpret_cast<char *>(fatTable.data()), fatTableSize);
@@ -110,12 +113,68 @@ bool FAT32Reader::readDeviceFatTable()
   return true;
 }
 
-void FAT32Reader::listRootDirectoryDeletedEntries()
+const std::vector<FAT32DirectoryEntry> &Fat32Device::getDeletedEntries()
 {
-  uint32_t firstDataSector = bootSector->reservedSectorCount + (bootSector->fatCount * bootSector->sectorsPerFat);
-  uint32_t currentCluster = bootSector->rootDirStartCluster;
-  uint32_t bytesPerCluster = bootSector->bytesPerSector * bootSector->sectorsPerCluster;
-  std::vector<FAT32DirectoryEntry> entries(bytesPerCluster / 32);
+  return deletedEntries;
+}
+
+void Fat32Device::printDeletedEntriesConsole()
+{
+  if (deletedEntries.empty())
+  {
+    std::cout << "No deleted entry is found\n";
+    return;
+  }
+
+  std::cout << "Deleted entries:\n";
+  for (std::size_t i{0}; i < deletedEntries.size(); ++i)
+  {
+    std::string entryName{"?"};
+    bool isDirectory{(deletedEntries[i].attributes & 0x10) != 0};
+
+    for (std::size_t j{1}; j < 8; ++j)
+    {
+      if (deletedEntries[i].name[j] == ' ')
+        break;
+      if (std::isprint(deletedEntries[i].name[j]))
+        entryName += static_cast<char>(deletedEntries[i].name[j]);
+    }
+
+    bool hasExtension{false};
+    for (std::size_t j{8}; j < 11; ++j)
+    {
+      if (deletedEntries[i].name[j] != ' ')
+      {
+        if (!hasExtension)
+        {
+          entryName += '.';
+          hasExtension = true;
+        }
+        if (std::isprint(deletedEntries[i].name[j]))
+          entryName += static_cast<char>(deletedEntries[i].name[j]);
+      }
+    }
+
+    if (!entryName.empty())
+    {
+      std::cout << i + 1 << ". " << entryName;
+      if (isDirectory)
+        std::cout << " (directory)\n";
+      else
+        std::cout << " (file)\n";
+    }
+  }
+}
+
+void Fat32Device::findDeletedEntries()
+{
+  deletedEntries.clear();
+
+  uint32_t firstDataSector{static_cast<uint32_t>(bootSector->reservedSectorCount) + (static_cast<uint32_t>(bootSector->fatCount) * bootSector->sectorsPerFat)};
+  uint32_t currentCluster{bootSector->rootDirStartCluster};
+  uint32_t bytesPerCluster{static_cast<uint32_t>(bootSector->bytesPerSector) * static_cast<uint32_t>(bootSector->sectorsPerCluster)};
+  uint8_t bytesPerEntry{32};
+  std::vector<FAT32DirectoryEntry> entries(bytesPerCluster / static_cast<uint32_t>(bytesPerEntry));
 
   while (currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
   {
@@ -125,30 +184,22 @@ void FAT32Reader::listRootDirectoryDeletedEntries()
       continue;
     }
 
-    uint32_t currentSector = firstDataSector + (currentCluster - 2) * bootSector->sectorsPerCluster;
-    uint32_t byteOffset = currentSector * bootSector->bytesPerSector;
+    uint32_t currentSector{firstDataSector + (currentCluster - 2) * static_cast<uint32_t>(bootSector->sectorsPerCluster)};
+    uint32_t byteOffset{currentSector * static_cast<uint32_t>(bootSector->bytesPerSector)};
 
     device.seekg(byteOffset);
     device.read(reinterpret_cast<char *>(entries.data()), bytesPerCluster);
-    
+
     for (const auto &entry : entries)
     {
       if (entry.name[0] == 0xE5)
       {
-        char fileName[13] = {0};
-        memcpy(fileName, entry.name + 1, 7);
-
-        if (entry.name[8] != ' ')
-        {
-          fileName[7] = '.';
-          memcpy(fileName + 8, entry.name + 8, 3);
-        }
-
-        std::cout << "Deleted File: " << fileName <<'\n';
-        std::cout << "File Size: " << entry.fileSize << '\n';
+        if ((entry.attributes & 0x0F) == 0x0F)
+          continue;
+        deletedEntries.push_back(entry);
       }
     }
-
+    entries.clear();
     currentCluster = fatTable[currentCluster];
   }
 }
