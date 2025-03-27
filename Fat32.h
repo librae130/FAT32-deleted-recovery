@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <algorithm>
+#include <stdexcept>
 
 // FAT32 Boot Sector structure
 struct FAT32BootSector
@@ -45,7 +46,7 @@ struct FAT32BootSector
 
 #pragma pack(push, 1)
 // FAT32 Directory Entry structure
-struct FAT32RootEntry
+struct FAT32Entry
 {
   uint8_t name[11];
   uint8_t attributes;
@@ -69,14 +70,11 @@ private:
 
   std::unique_ptr<FAT32BootSector> bootSector{nullptr};
   std::vector<uint32_t> fatTable{};
+  std::vector<FAT32Entry> deletedEntries{};
 
-  std::vector<FAT32RootEntry> deletedEntries{};
-
-  bool readDeviceBootSector();
-  bool readDeviceFatTable();
+  void readDeviceBootSector();
+  void readDeviceFatTable();
   bool isFat32();
-  std::string convertEntryNameToString(const FAT32RootEntry &entry);
-  std::vector<uint8_t> readClusterData(const uint32_t cluster);
 
 public:
   Fat32Device() = default;
@@ -84,13 +82,13 @@ public:
   Fat32Device &operator=(const Fat32Device &) = delete;
   Fat32Device(const std::string_view path);
   ~Fat32Device();
-  void printBootSectorInfo();
-  bool read(const std::string_view path);
-  const std::vector<FAT32RootEntry> &getDeletedEntries() { return deletedEntries; }
-  void printDeletedEntriesConsole();
-  void findDeletedEntries();
-  bool rootEntryisDir(const FAT32RootEntry &entry);
-  bool rootEntryisFile(const FAT32RootEntry &entry);
-  void recoverDeletedFile(const FAT32RootEntry &entry, const std::string_view outputDir);
-  void recoverDeletedFolder(const FAT32RootEntry &entry, const std::string_view outputDir);
+
+  const std::unique_ptr<FAT32BootSector> &getBootSector() { return bootSector; }
+  const std::vector<uint32_t> &getFatTable() { return fatTable; }
+  const std::vector<FAT32Entry> &getDeletedEntries() { return deletedEntries; }
+
+  void readDevice(const std::string_view path);
+  std::vector<uint8_t> readClusterData(const uint32_t cluster);
+  std::vector<FAT32Entry> readClusterEntries(const uint32_t cluster);
+  const std::vector<FAT32Entry>& readDeletedEntries();
 };

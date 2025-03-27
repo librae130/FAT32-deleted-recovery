@@ -1,27 +1,39 @@
-#include "fat32.h"
+#include "Fat32Recoverer.h"
 
 int main()
 {
-  std::cout << "- Enter FAT32 device's path: ";
-  std::string inputPath{};
-  std::cin >> inputPath;
-  Fat32Device device{"/dev/nvme1n1p4"};
-  device.printBootSectorInfo();
-  device.findDeletedEntries();
-  device.printDeletedEntriesConsole();
-  std::cout << "- Enter the entry number to recover: ";
-  unsigned long int num{};
-  std::cin >> num;
-  if (num > device.getDeletedEntries().size() || num <= 0)
-    return 0;
-  else
+  try
   {
+    std::cout << "- Enter device: ";
+    std::string device{};
+    std::cin >> device;
+
+    Fat32Recoverer recoverer{device};
+
+    recoverer.printDeletedEntriesConsole();
+    std::cout << "- Enter index to recover: ";
+    std::size_t idx{};
+    std::cin >> idx;
+
     std::cout << "+ Writing to output path on current partition can render some deleted files/folders unrecoverable.\n";
-    std::cout << "- Enter output path: ";
+    std::cout << "- Enter output directory: ";
     std::string outputPath{};
     std::cin >> outputPath;
-    device.recoverDeletedFolder(device.getDeletedEntries()[num - 1], outputPath);
-  }
-  return 0;
-}
 
+    recoverer.recoverDeletedEntry(idx, outputPath);
+
+    std::cout << "- Succesfully recovered";
+
+    return 0;
+  }
+  catch (const std::runtime_error& error)
+  {
+    std::cerr << error.what() << std::endl;
+    return 1;
+  }
+  catch (...)
+  {
+    std::cerr << "Unknown error ocurred" << std::endl;
+    return 1;
+  }
+}
