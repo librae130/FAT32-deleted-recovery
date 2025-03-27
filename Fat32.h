@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <algorithm>
+#include <stdexcept>
 
 // FAT32 Boot Sector structure
 struct FAT32BootSector
@@ -71,8 +72,8 @@ private:
   std::vector<uint32_t> fatTable{};
   std::vector<FAT32Entry> deletedEntries{};
 
-  bool readDeviceBootSector();
-  bool readDeviceFatTable();
+  void readDeviceBootSector();
+  void readDeviceFatTable();
   bool isFat32();
 
 public:
@@ -86,7 +87,7 @@ public:
   const std::vector<uint32_t> &getFatTable() { return fatTable; }
   const std::vector<FAT32Entry> &getDeletedEntries() { return deletedEntries; }
 
-  bool readDevice(const std::string_view path);
+  void readDevice(const std::string_view path);
   std::vector<uint8_t> readClusterData(const uint32_t cluster);
   std::vector<FAT32Entry> readClusterEntries(const uint32_t cluster);
   const std::vector<FAT32Entry>& readDeletedEntries();

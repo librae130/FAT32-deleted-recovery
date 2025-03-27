@@ -16,11 +16,12 @@ public:
   Fat32Recoverer(const std::string_view path);
   ~Fat32Recoverer() = default;
   
-  bool readDevice(const std::string_view path);
+  void readDevice(const std::string_view path);
   void printDeletedEntriesConsole();
   void findDeletedEntries();
-  bool rootEntryisDir(const FAT32Entry &entry);
-  bool rootEntryisFile(const FAT32Entry &entry);
+  bool entryisDir(const FAT32Entry &entry);
+  bool entryisFile(const FAT32Entry &entry);
+  void recoverDeletedEntry(const std::size_t index, const std::string_view outputDir);
   void recoverDeletedFile(const FAT32Entry &entry, const std::string_view outputDir);
-  void recoverDeletedFolder(const FAT32Entry &entry, const std::string_view outputDir);
+  void recoverDeletedDir(const FAT32Entry &entry, const std::string_view outputDir);
 };
