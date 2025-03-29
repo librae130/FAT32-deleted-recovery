@@ -35,7 +35,7 @@ std::string Fat32Recoverer::convertEntryNameToString(const FAT32Entry &entry)
   if (entry.name[0] == 0xE5)
     entryName += '_';
   else
-    entryName += entry.name[0];
+    entryName += static_cast<char>(entry.name[0]);
 
   for (std::size_t j{1}; j < 8; ++j)
   {
