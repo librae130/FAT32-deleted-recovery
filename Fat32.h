@@ -72,8 +72,8 @@ private:
   std::vector<uint32_t> fatTable{};
   std::vector<FAT32Entry> deletedEntries{};
 
-  void readDeviceBootSector();
-  void readDeviceFatTable();
+  void readBootSector();
+  void readFatTable();
   bool isFat32();
 
 public:
@@ -90,5 +90,6 @@ public:
   void readDevice(const std::string_view path);
   std::vector<uint8_t> readClusterData(const uint32_t cluster);
   std::vector<FAT32Entry> readClusterEntries(const uint32_t cluster);
+  const std::vector<FAT32Entry>& readEntries();
   const std::vector<FAT32Entry>& readDeletedEntries();
 };

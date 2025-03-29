@@ -5,7 +5,7 @@ try
 {
   device.readDevice(path);
 }
-catch (const std::runtime_error&)
+catch (const std::runtime_error &)
 {
   throw;
 }
@@ -27,7 +27,16 @@ void Fat32Recoverer::readDevice(const std::string_view path)
 
 std::string Fat32Recoverer::convertEntryNameToString(const FAT32Entry &entry)
 {
-  std::string entryName{"_"};
+  if (entry.name[0] == 0x0)
+    return "";
+
+  std::string entryName{};
+
+  if (entry.name[0] == 0xE5)
+    entryName += '_';
+  else
+    entryName += entry.name[0];
+
   for (std::size_t j{1}; j < 8; ++j)
   {
     if (entry.name[j] == ' ')
@@ -118,7 +127,7 @@ void Fat32Recoverer::recoverDeletedFile(const FAT32Entry &entry, const std::stri
       throw std::runtime_error{"Error creating file when recovering"};
     file.write(reinterpret_cast<char *>(fileData.data()), static_cast<std::streamsize>(fileData.size()));
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
@@ -141,20 +150,21 @@ void Fat32Recoverer::recoverDeletedDir(const FAT32Entry &entry, const std::strin
     std::string dirName{convertEntryNameToString(entry)};
     uint32_t currentCluster{(static_cast<uint32_t>(entry.firstClusterHigh) << 16) | entry.firstClusterLow};
     std::vector<FAT32Entry> dirEntries{};
+    std::vector<uint32_t> dirClusters{};
     while (currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
     {
-      if (currentCluster == 0x0FFFFFF7)
-      {
-        currentCluster = device.getFatTable()[currentCluster];
-        continue;
-      }
-
       std::vector<FAT32Entry> clusterEntries{device.readClusterEntries(currentCluster)};
       for (const auto &dirEntry : clusterEntries)
       {
-        if (dirEntry.name[0] == 0xE5)
-          dirEntries.push_back(dirEntry);
+        if (dirEntry.name[0] == '.' && (dirEntry.name[1] == ' ' || (dirEntry.name[1] == '.' && dirEntry.name[2] == ' '))) // "." and ".." entry
+          continue;
+
+        if (dirEntry.name[0] == 0x0 || (!entryisFile(dirEntry) && !entryisDir(dirEntry)))
+          continue;
+          
+        dirEntries.push_back(dirEntry);
       }
+
       currentCluster = device.getFatTable()[currentCluster];
     }
 
@@ -171,7 +181,7 @@ void Fat32Recoverer::recoverDeletedDir(const FAT32Entry &entry, const std::strin
         recoverDeletedFile(dirEntry, newOutputDir.string());
     }
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }

@@ -6,7 +6,7 @@ try
 {
   readDevice(devicePath);
 }
-catch (const std::runtime_error&)
+catch (const std::runtime_error &)
 {
   throw;
 }
@@ -33,21 +33,21 @@ void Fat32Device::readDevice(const std::string_view path)
     device.open(devicePath, std::ios::binary | std::ios::in);
     if (!device.is_open())
       throw std::runtime_error{"Failed to open device"};
-    readDeviceBootSector();
+    readBootSector();
 
     if (!isFat32())
       throw std::runtime_error{"Path is not a FAT32 device"};
 
-    readDeviceFatTable();
+    readFatTable();
     readDeletedEntries();
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
 }
 
-void Fat32Device::readDeviceBootSector()
+void Fat32Device::readBootSector()
 {
   try
   {
@@ -86,7 +86,7 @@ void Fat32Device::readDeviceBootSector()
     if (!device)
       throw std::runtime_error{"Error reading boot sector"};
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
@@ -96,7 +96,7 @@ void Fat32Device::readDeviceBootSector()
   }
 }
 
-void Fat32Device::readDeviceFatTable()
+void Fat32Device::readFatTable()
 {
   try
   {
@@ -109,7 +109,7 @@ void Fat32Device::readDeviceFatTable()
     if (!device)
       throw std::runtime_error{"Error reading fat table"};
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
@@ -133,15 +133,17 @@ std::vector<uint8_t> Fat32Device::readClusterData(const uint32_t cluster)
 
     return clusterData;
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
 }
+
 std::vector<FAT32Entry> Fat32Device::readClusterEntries(const uint32_t cluster)
 {
   try
   {
+
     uint32_t firstDataSector{bootSector->reservedSectorCount + (bootSector->fatCount * bootSector->sectorsPerFat)};
     uint32_t bytesPerCluster{static_cast<uint32_t>(bootSector->bytesPerSector) * static_cast<uint32_t>(bootSector->sectorsPerCluster)};
     uint32_t sectorNumber{firstDataSector + (cluster - 2) * bootSector->sectorsPerCluster};
@@ -157,7 +159,7 @@ std::vector<FAT32Entry> Fat32Device::readClusterEntries(const uint32_t cluster)
 
     return clusterEntries;
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
@@ -177,12 +179,6 @@ const std::vector<FAT32Entry> &Fat32Device::readDeletedEntries()
 
     while (currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
     {
-      if (currentCluster == 0x0FFFFFF7)
-      {
-        currentCluster = fatTable[currentCluster];
-        continue;
-      }
-
       uint32_t currentSector{firstDataSector + (currentCluster - 2) * static_cast<uint32_t>(bootSector->sectorsPerCluster)};
       uint32_t byteOffset{currentSector * static_cast<uint32_t>(bootSector->bytesPerSector)};
 
@@ -206,7 +202,7 @@ const std::vector<FAT32Entry> &Fat32Device::readDeletedEntries()
     }
     return deletedEntries;
   }
-  catch (const std::runtime_error&)
+  catch (const std::runtime_error &)
   {
     throw;
   }
