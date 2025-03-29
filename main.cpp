@@ -8,7 +8,7 @@ int main()
     std::string device{};
     std::cin >> device;
 
-    Fat32Recoverer recoverer{device};
+    Fat32Recoverer recoverer{"/dev/nvme0n1p4"};
 
     recoverer.printDeletedEntriesConsole();
     std::cout << "- Enter index to recover: ";
@@ -20,9 +20,9 @@ int main()
     std::string outputPath{};
     std::cin >> outputPath;
 
-    recoverer.recoverDeletedEntry(idx, outputPath);
+    recoverer.recoverDeletedEntry(idx, "/home/yao/Downloads/");
 
-    std::cout << "- Succesfully recovered";
+    std::cout << "- Succesfully recovered\n";
 
     return 0;
   }
