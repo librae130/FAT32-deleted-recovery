@@ -4,6 +4,7 @@ Fat32Recoverer::Fat32Recoverer(const std::string_view path)
 try
 {
   device.readDevice(path);
+  readDeletedEntries();
 }
 catch (const std::runtime_error &)
 {
@@ -20,95 +21,195 @@ bool Fat32Recoverer::entryisFile(const FAT32Entry &entry)
   return !entryisDir(entry) && ((entry.attributes & 0x08) != 0x08);
 }
 
-void Fat32Recoverer::readDevice(const std::string_view path)
+bool Fat32Recoverer::entryisLongFileName(const FAT32Entry &entry)
 {
-  device.readDevice(path);
+  return (entry.attributes & 0x0F) == 0x0F;
 }
 
-std::string Fat32Recoverer::convertEntryNameToString(const FAT32Entry &entry)
+bool Fat32Recoverer::entryisDeleted(const FAT32Entry &entry)
 {
-  if (entry.name[0] == 0x0)
+  return entry.name[0] == 0xE5;
+}
+
+void Fat32Recoverer::readDevice(const std::string_view path)
+{
+  try
+  {
+    device.readDevice(path);
+    readDeletedEntries();
+  }
+  catch (const std::runtime_error &)
+  {
+    throw;
+  }
+}
+
+void Fat32Recoverer ::readDeletedEntries()
+{
+  try
+  {
+    std::vector<FAT32Entry> cachedDeletedEntries{};
+    for (const auto &entry : device.getEntries())
+    {
+      if (entryisLongFileName(entry))
+      {
+        cachedDeletedEntries.push_back(entry);
+        continue;
+      }
+
+      if (entryisDir(entry) || entryisFile(entry))
+      {
+        if (entryisDeleted(entry))
+        {
+          cachedDeletedEntries.push_back(entry);
+          deletedEntries.push_back(cachedDeletedEntries);
+        }
+        else
+          cachedDeletedEntries.clear();
+      }
+    }
+  }
+  catch (...)
+  {
+    throw std ::runtime_error{"Error reading deleted entries"};
+  }
+}
+
+std::string Fat32Recoverer::getEntryName(const std::vector<FAT32Entry> &entry)
+{
+  if (entry.empty())
     return "";
 
-  std::string entryName{};
+  if (entry.size() > 1)
+  {
+    std::string longFileName{};
 
-  if (entry.name[0] == 0xE5)
-    entryName += '_';
+    for (long long i{static_cast<long long>(entry.size()) - 2}; i >= 0; --i)
+    {
+      if ((entry[static_cast<std::size_t>(i)].attributes & 0x0F) != 0x0F)
+        continue;
+
+      for (std::size_t j{1}; j < 11; j += 2)
+      {
+        if (entry[static_cast<std::size_t>(i)].name[j] == 0 && entry[static_cast<std::size_t>(i)].name[j + 1] == 0)
+          break;
+        char16_t character{static_cast<char16_t>(entry[static_cast<std::size_t>(i)].name[j] | (entry[static_cast<std::size_t>(i)].name[j + 1] << 8))};
+        if (character > 0 && character <= 127)
+          longFileName += static_cast<char>(character);
+        else if (character != 0xFFFF && character != 0)
+          longFileName += '?';
+      }
+
+      for (std::size_t j{0}; j < 12; j += 2)
+      {
+        char16_t character{static_cast<char16_t>(*((uint8_t *)(&entry[static_cast<std::size_t>(i)]) + 14 + j) | (*((uint8_t *)(&entry[static_cast<std::size_t>(i)]) + 14 + j + 1) << 8))};
+        if (character > 0 && character <= 127)
+          longFileName += static_cast<char>(character);
+        else if (character != 0xFFFF && character != 0)
+          longFileName += '?';
+      }
+
+      for (std::size_t j{0}; j < 4; j += 2)
+      {
+        char16_t character{static_cast<char16_t>(*((uint8_t *)(&entry[static_cast<std::size_t>(i)]) + 28 + j) | (*((uint8_t *)(&entry[static_cast<std::size_t>(i)]) + 28 + j + 1) << 8))};
+        if (character > 0 && character <= 127)
+          longFileName += static_cast<char>(character);
+        else if (character != 0xFFFF && character != 0)
+          longFileName += '?';
+      }
+    }
+    return longFileName;
+  }
+
+  std::string shortName{};
+
+  if (entry.back().name[0] == 0xE5)
+    shortName += '_';
   else
-    entryName += static_cast<char>(entry.name[0]);
+    shortName += static_cast<char>(entry.back().name[0]);
 
   for (std::size_t j{1}; j < 8; ++j)
   {
-    if (entry.name[j] == ' ')
+    if (entry.back().name[j] == ' ')
       break;
-    if (std::isprint(entry.name[j]))
-      entryName += static_cast<char>(entry.name[j]);
+    if (std::isprint(entry.back().name[j]))
+      shortName += static_cast<char>(entry.back().name[j]);
   }
 
   bool hasExtension{false};
   for (std::size_t j{8}; j < 11; ++j)
   {
-    if (entry.name[j] != ' ')
+    if (entry.back().name[j] != ' ')
     {
       if (!hasExtension)
       {
-        entryName += '.';
+        shortName += '.';
         hasExtension = true;
       }
-      if (std::isprint(entry.name[j]))
-        entryName += static_cast<char>(entry.name[j]);
+      if (std::isprint(entry.back().name[j]))
+        shortName += static_cast<char>(entry.back().name[j]);
     }
   }
-  return entryName;
+  return shortName;
 }
 
 void Fat32Recoverer::printDeletedEntriesConsole()
 {
-  if (device.getDeletedEntries().empty())
+  if (deletedEntries.empty())
   {
     std::cout << "No deleted entry is found\n";
     return;
   }
 
   std::cout << "Deleted entries:\n";
-  for (std::size_t i{0}; i < device.getDeletedEntries().size(); ++i)
+  std::size_t count{1};
+  for (const auto &entries : deletedEntries)
   {
-    std::string entryName{convertEntryNameToString(device.getDeletedEntries()[i])};
-    if (!entryName.empty())
-    {
-      std::cout << i + 1 << ". " << entryName;
-      if (entryisDir(device.getDeletedEntries()[i]))
-        std::cout << " (directory)\n";
-      else
-        std::cout << " (file)\n";
-    }
+    std::string entryName{getEntryName(entries)};
+
+    std::cout << count << ". " << entryName;
+    if (entryisDir(entries.back()))
+      std::cout << " (directory)\n";
+    else
+      std::cout << " (file)\n";
+    ++count;
   }
 }
 
 void Fat32Recoverer::recoverDeletedEntry(const std::size_t index, const std::string_view outputDir)
 {
-  if (entryisDir(device.getDeletedEntries()[index - 1]))
-    recoverDeletedDir(device.getDeletedEntries()[index - 1], outputDir);
-  if (entryisFile(device.getDeletedEntries()[index - 1]))
-    recoverDeletedFile(device.getDeletedEntries()[index - 1], outputDir);
+  try
+  {
+    if (index <= 0 || index > deletedEntries.size())
+      throw std::runtime_error{"Out of bound when acessing deleted entries"};
+
+    if (entryisDir(deletedEntries[index - 1].back()))
+      recoverDeletedDir(deletedEntries[index], outputDir);
+    else
+      recoverDeletedFile(deletedEntries[index], outputDir);
+  }
+  catch (const std::runtime_error &)
+  {
+    throw;
+  }
 }
 
-void Fat32Recoverer::recoverDeletedFile(const FAT32Entry &entry, const std::string_view outputDir)
+void Fat32Recoverer::recoverDeletedFile(const std::vector<FAT32Entry> &entry, const std::string_view outputDir)
 {
   try
   {
-    if (!entryisFile(entry))
+    if (!entryisFile(entry.back()))
       throw std::runtime_error{"Entry is not a file"};
 
-    if (device.getDeletedEntries().empty())
+    if (deletedEntries.empty())
       throw std::runtime_error{"No deleted entry to recover file"};
 
     std::vector<uint8_t> fileData;
-    std::string fileName{convertEntryNameToString(entry)};
+    std::string fileName{getEntryName(entry)};
 
-    uint32_t currentCluster{(static_cast<uint32_t>(entry.firstClusterHigh) << 16) | entry.firstClusterLow};
+    uint32_t currentCluster{(static_cast<uint32_t>(entry.back().firstClusterHigh) << 16) | entry.back().firstClusterLow};
     uint32_t bytesPerCluster{static_cast<uint32_t>(device.getBootSector()->bytesPerSector) * static_cast<uint32_t>(device.getBootSector()->sectorsPerCluster)};
-    uint32_t remainingSize{entry.size};
+    uint32_t remainingSize{entry.back().size};
 
     while (remainingSize > 0 && currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
     {
@@ -137,20 +238,20 @@ void Fat32Recoverer::recoverDeletedFile(const FAT32Entry &entry, const std::stri
   }
 }
 
-void Fat32Recoverer::recoverDeletedDir(const FAT32Entry &entry, const std::string_view outputDir)
+void Fat32Recoverer::recoverDeletedDir(const std::vector<FAT32Entry> &entry, const std::string_view outputDir)
 {
   try
   {
-    if (!entryisDir(entry))
+    if (!entryisDir(entry.back()))
       throw std::runtime_error{"Entry is not a directory"};
 
-    if (device.getDeletedEntries().empty())
+    if (deletedEntries.empty())
       throw std::runtime_error{"No deleted entry to recover directory"};
 
-    std::string dirName{convertEntryNameToString(entry)};
-    uint32_t currentCluster{(static_cast<uint32_t>(entry.firstClusterHigh) << 16) | entry.firstClusterLow};
+    std::string dirName{getEntryName(entry)};
+    uint32_t currentCluster{(static_cast<uint32_t>(entry.back().firstClusterHigh) << 16) | entry.back().firstClusterLow};
     std::vector<FAT32Entry> dirEntries{};
-    std::vector<uint32_t> dirClusters{};
+
     while (currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
     {
       std::vector<FAT32Entry> clusterEntries{device.readClusterEntries(currentCluster)};
@@ -159,9 +260,12 @@ void Fat32Recoverer::recoverDeletedDir(const FAT32Entry &entry, const std::strin
         if (dirEntry.name[0] == '.' && (dirEntry.name[1] == ' ' || (dirEntry.name[1] == '.' && dirEntry.name[2] == ' '))) // "." and ".." entry
           continue;
 
-        if (dirEntry.name[0] == 0x0 || (!entryisFile(dirEntry) && !entryisDir(dirEntry)))
+        if (dirEntry.name[0] == 0x0)
           continue;
-          
+
+        if (!entryisFile(dirEntry) || !entryisDir(dirEntry) || !entryisLongFileName(dirEntry))
+          continue;
+
         dirEntries.push_back(dirEntry);
       }
 
@@ -173,12 +277,26 @@ void Fat32Recoverer::recoverDeletedDir(const FAT32Entry &entry, const std::strin
     if (!std::filesystem::create_directory(newOutputDir))
       throw std::runtime_error{"Failed to create directory when recovering"};
 
-    for (const auto &dirEntry : dirEntries)
+    std::vector<FAT32Entry> cachedDirEntries{};
+    for (const auto &entry : device.getEntries())
     {
-      if (entryisDir(dirEntry))
-        recoverDeletedDir(dirEntry, newOutputDir.string());
-      else if (entryisFile(dirEntry))
-        recoverDeletedFile(dirEntry, newOutputDir.string());
+      if (entryisLongFileName(entry))
+      {
+        cachedDirEntries.push_back(entry);
+        continue;
+      }
+      else if (entryisDir(entry))
+      {
+        cachedDirEntries.push_back(entry);
+        recoverDeletedDir(cachedDirEntries, newOutputDir.string());
+        cachedDirEntries.clear();
+      }
+      else
+      {
+        cachedDirEntries.push_back(entry);
+        recoverDeletedFile(cachedDirEntries, newOutputDir.string());
+        cachedDirEntries.clear();
+      }
     }
   }
   catch (const std::runtime_error &)
