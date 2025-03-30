@@ -11,6 +11,7 @@ int main()
     Fat32Recoverer recoverer{device};
 
     recoverer.printDeletedEntriesConsole();
+    std::cout << "+ Some corrupted (partly-overwritten) files/folders may appear in the list.\n";
     std::cout << "- Enter index to recover: ";
     std::size_t index{};
     std::cin >> index;
@@ -20,19 +21,7 @@ int main()
     std::string outputPath{};
     std::cin >> outputPath;
 
-    try
-    {
-      recoverer.recoverDeletedEntry(index - 1, outputPath);
-    }
-    catch (const std::runtime_error &e)
-    {
-      std::cout << "+ Index not found.\n";
-      return 0;
-    }
-
-    std::cout << "- Succesfully recovered.\n";
-
-    return 0;
+    recoverer.recoverDeletedEntry(index - 1, outputPath);
   }
   catch (const std::runtime_error &error)
   {
@@ -44,4 +33,7 @@ int main()
     std::cerr << "Unknown error ocurred" << std::endl;
     return 1;
   }
+
+  std::cout << "- Succesfully recovered.\n";
+  return 0;
 }

@@ -83,6 +83,7 @@ void Fat32Device::readBootSector()
     device.read(reinterpret_cast<char *>(bootSector->fatName), sizeof(bootSector->fatName));
     device.read(reinterpret_cast<char *>(bootSector->executableCode), sizeof(bootSector->executableCode));
     device.read(reinterpret_cast<char *>(bootSector->bootRecordSignature), sizeof(bootSector->bootRecordSignature));
+    device.seekg(0);
 
     if (!device)
       throw std::runtime_error{"Error reading boot sector"};
@@ -106,7 +107,7 @@ void Fat32Device::readFatTable()
     fatTable.resize(fatTableSize / sizeof(uint32_t));
     device.seekg(fatOffset);
     device.read(reinterpret_cast<char *>(fatTable.data()), fatTableSize);
-
+    device.seekg(0);
     if (!device)
       throw std::runtime_error{"Error reading fat table"};
   }
@@ -132,6 +133,7 @@ std::vector<uint8_t> Fat32Device::readClusterData(const uint32_t cluster)
     std::vector<uint8_t> clusterData(bytesPerCluster);
     device.seekg(byteOffset);
     device.read(reinterpret_cast<char *>(clusterData.data()), bytesPerCluster);
+    device.seekg(0);
 
     if (!device)
       throw std::runtime_error{"Error reading cluster data"};
@@ -157,6 +159,7 @@ std::vector<FAT32Entry> Fat32Device::readClusterEntries(const uint32_t cluster)
     std::vector<FAT32Entry> clusterEntries(bytesPerCluster / bytesPerEntry);
     device.seekg(byteOffset);
     device.read(reinterpret_cast<char *>(clusterEntries.data()), bytesPerCluster);
+    device.seekg(0);
 
     if (!device)
       throw std::runtime_error{"Error reading cluster entries"};
@@ -188,6 +191,7 @@ const std::vector<FAT32Entry> &Fat32Device::readEntries()
 
       device.seekg(byteOffset);
       device.read(reinterpret_cast<char *>(cachedEntries.data()), bytesPerCluster);
+      device.seekg(0);
 
       if (!device)
         throw std::runtime_error{"Error reading an entry"};

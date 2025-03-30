@@ -10,6 +10,7 @@ private:
   std::vector<std::vector<FAT32Entry>> deletedEntries{};
 
   std::string getEntryName(const std::vector<FAT32Entry> &entry);
+  void writeFileToPath(const std::vector<uint8_t> &fileData, const std::string outputDir);
 
 public:
   Fat32Recoverer() = default;

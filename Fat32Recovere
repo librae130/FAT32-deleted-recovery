@@ -23,7 +23,7 @@ bool Fat32Recoverer::entryisFile(const FAT32Entry &entry)
 
 bool Fat32Recoverer::entryisLongFileName(const FAT32Entry &entry)
 {
-  return entry.attributes == 0x0F;
+  return (entry.attributes & 0x0F) == 0x0F;
 }
 
 bool Fat32Recoverer::entryisDeleted(const FAT32Entry &entry)
@@ -175,11 +175,12 @@ void Fat32Recoverer::printDeletedEntriesConsole()
   }
 }
 
+
 void Fat32Recoverer::recoverDeletedEntry(const std::size_t index, const std::string_view outputDir)
 {
   try
   {
-    if (index >= deletedEntries.size())
+    if (index > deletedEntries.size())
       throw std::runtime_error{"Out of bound when acessing deleted entries"};
 
     if (entryisDir(deletedEntries[index].back()))
@@ -188,46 +189,6 @@ void Fat32Recoverer::recoverDeletedEntry(const std::size_t index, const std::str
       recoverDeletedFile(deletedEntries[index], outputDir);
   }
   catch (const std::runtime_error &)
-  {
-    throw;
-  }
-}
-
-void Fat32Recoverer::writeFileToPath(const std::vector<uint8_t> &fileData, const std::string outputDir)
-{
-  try
-  {
-    std::ofstream file(outputDir, std::ios::binary | std::ios::out | std::ios::trunc);
-
-    if (!file.is_open() || !file.good())
-      throw std::runtime_error{"Failed to open output file for writing"};
-
-    std::size_t chunkSize{4096};
-    std::size_t bytesLeft{fileData.size()};
-    std::size_t position{0};
-
-    while (bytesLeft > 0)
-    {
-      std::size_t bytesToWrite{std::min(chunkSize, bytesLeft)};
-
-      if (!file.write(reinterpret_cast<const char *>(&fileData[position]), static_cast<std::streamsize>(bytesToWrite)))
-        throw std::runtime_error{"Error writing data to file"};
-
-      position += bytesToWrite;
-      bytesLeft -= bytesToWrite;
-    }
-
-    file.flush();
-
-    if (file.bad() || file.fail())
-      throw std::runtime_error{"Error occurred during file write operation"};
-
-    file.close();
-
-    if (!std::filesystem::exists(outputDir) || std::filesystem::file_size(outputDir) != fileData.size())
-      throw std::runtime_error{"File verification failed after writing"};
-  }
-  catch (const std::exception &)
   {
     throw;
   }
@@ -252,11 +213,11 @@ void Fat32Recoverer::recoverDeletedFile(const std::vector<FAT32Entry> &entry, co
 
     while (remainingSize > 0 && currentCluster >= 0x2 && currentCluster < 0x0FFFFFF8)
     {
+      if (currentCluster==0x0FFFFFF7)
+        break;
+        
       std::vector<uint8_t> clusterData{device.readClusterData(currentCluster)};
       uint32_t bytesToInsert{std::min(remainingSize, bytesPerCluster)};
-
-      if (clusterData.size() != bytesPerCluster)
-        throw std::runtime_error{"Incomplete cluster read"};
 
       fileData.insert(fileData.end(), clusterData.begin(), clusterData.begin() + bytesToInsert);
       remainingSize -= bytesToInsert;
@@ -265,8 +226,11 @@ void Fat32Recoverer::recoverDeletedFile(const std::vector<FAT32Entry> &entry, co
 
     std::filesystem::path currentPath{outputDir};
     std::filesystem::path newOutputPath{currentPath / fileName};
-
-    writeFileToPath(fileData, newOutputPath.string());
+    std::fstream file(newOutputPath.string(), std::ios::binary | std::ios::out);
+    if (!file)
+      throw std::runtime_error{"Error creating file when recovering"};
+    file.write(reinterpret_cast<char *>(fileData.data()), static_cast<std::streamsize>(fileData.size()));
+    file.close();
   }
   catch (const std::runtime_error &)
   {
@@ -303,7 +267,7 @@ void Fat32Recoverer::recoverDeletedDir(const std::vector<FAT32Entry> &entry, con
         if (dirEntry.name[0] == 0x0)
           continue;
 
-        if (!entryisFile(dirEntry) && !entryisDir(dirEntry) && !entryisLongFileName(dirEntry))
+        if (!entryisFile(dirEntry) || !entryisDir(dirEntry) || !entryisLongFileName(dirEntry))
           continue;
 
         dirEntries.push_back(dirEntry);
