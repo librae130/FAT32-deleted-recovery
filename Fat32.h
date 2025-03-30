@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-// FAT32 Boot Sector structure
+// FAT32 Boot Sector structure.
 struct FAT32BootSector
 {
   uint8_t jumpBoot[3]{};
@@ -44,8 +44,8 @@ struct FAT32BootSector
   uint8_t bootRecordSignature[2]{};
 };
 
+// FAT32 Directory Entry structure, packed for easier reading, but slower.
 #pragma pack(push, 1)
-// FAT32 Directory Entry structure
 struct FAT32Entry
 {
   uint8_t name[11]{};
@@ -62,33 +62,57 @@ struct FAT32Entry
 };
 #pragma pack(pop)
 
+// Class for reading a Fat32-formatted device/partition/disk/...
 class Fat32Device
 {
 private:
   std::string devicePath{};
-  std::fstream device{};
+  std::fstream device{}; // Device/partition/disk/... is read as file stream
 
+  // Member storing Boot Sector, FAT table and Entries read from device/partition/disk/...
   std::unique_ptr<FAT32BootSector> bootSector{nullptr};
   std::vector<uint32_t> fatTable{};
   std::vector<FAT32Entry> entries{};
 
+  // Private methods for reading Boot Sector, FAT table and Root Entries of device/partition/disk/...
   void readBootSector();
   void readFatTable();
+  void readRootEntries(); // Do note that this read ALL types of entry.
+
+  // Private method checking if the read device/partition/disk/... is really FAT32-formatted,
+  // used after reading Boot Sector.
   bool isFat32();
 
 public:
+  // Default constructor.
   Fat32Device() = default;
+
+  // Take a device/partition/disk/...'s path to start reading Boot Sector, FAT Table and Entries immediately.
+  Fat32Device(const std::string_view path);
+
+  // Disabled copy and move semantics.
   Fat32Device(const Fat32Device &) = delete;
   Fat32Device &operator=(const Fat32Device &) = delete;
-  Fat32Device(const std::string_view path);
+
+  // Constructor.
   ~Fat32Device();
 
+  // Public getters for Boot Sector, FAT Table and Root Entries read from device/partition/disk/...
   const std::unique_ptr<FAT32BootSector> &getBootSector() { return bootSector; }
   const std::vector<uint32_t> &getFatTable() { return fatTable; }
-  const std::vector<FAT32Entry> &getEntries() { return entries; }
+  const std::vector<FAT32Entry> &getRootEntries() { return entries; }
 
+  // Public method for reading Boot Sector, FAT Table and Entries device/partition/disk/...,
+  // used by constructor, but user can use this as well.
   void readDevice(const std::string_view path);
+
+  // Public method for reading and returning data from a cluster,
+  // useful for getting data region's file's contents.
+  // Do note that this does not check whether it's root directory or data clusters, maybe later...
   std::vector<uint8_t> readClusterData(const uint32_t cluster);
+
+  // Public method for retrieving entries (4 bytes/entry) available in the cluster,
+  // useful for getting entries from directories.
+  // Do note that this does not check whether it's directory's clusters or data clusters, maybe later...
   std::vector<FAT32Entry> readClusterEntries(const uint32_t cluster);
-  const std::vector<FAT32Entry>& readEntries();
 };
