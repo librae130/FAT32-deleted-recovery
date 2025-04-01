@@ -26,11 +26,13 @@ int main()
   catch (const std::runtime_error &error)
   {
     std::cerr << error.what() << std::endl;
+    std::getchar();
     return 1;
   }
   catch (...)
   {
     std::cerr << "Unknown error ocurred" << std::endl;
+    std::getchar();
     return 1;
   }
 

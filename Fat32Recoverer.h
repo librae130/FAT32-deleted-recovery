@@ -55,6 +55,7 @@ public:
   // List starts at #1 for index #0.
   void printDeletedEntriesConsole();
 
+  // Public methods for checking each type/characteristic of an entry.
   bool entryisDir(const FAT32Entry &entry);
   bool entryisFile(const FAT32Entry &entry);
   bool entryisLongFileName(const FAT32Entry &entry);
