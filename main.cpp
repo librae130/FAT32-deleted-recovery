@@ -35,5 +35,6 @@ int main()
   }
 
   std::cout << "- Succesfully recovered.\n";
+  std::getchar();
   return 0;
 }
