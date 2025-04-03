@@ -26,17 +26,32 @@ int main()
   catch (const std::runtime_error &error)
   {
     std::cerr << error.what() << std::endl;
-    std::getchar();
+
+    do
+    {
+      std::cout << "\nPress enter to exit...\n";
+    } while (std::cin.get() != '\n');
+
     return 1;
   }
   catch (...)
   {
     std::cerr << "Unknown error ocurred" << std::endl;
-    std::getchar();
+    
+    do
+    {
+      std::cout << "\nPress enter to exit...\n";
+    } while (std::cin.get() != '\n');
+
     return 1;
   }
 
   std::cout << "- Succesfully recovered.\n";
-  std::getchar();
+
+  do
+  {
+    std::cout << "\nPress enter to exit...\n";
+  } while (std::cin.get() != '\n');
+
   return 0;
 }
