@@ -27,6 +27,7 @@ int main()
   {
     std::cerr << error.what() << std::endl;
 
+    std::cin.ignore();
     do
     {
       std::cout << "\nPress enter to exit...\n";
@@ -37,7 +38,8 @@ int main()
   catch (...)
   {
     std::cerr << "Unknown error ocurred" << std::endl;
-    
+
+    std::cin.ignore();
     do
     {
       std::cout << "\nPress enter to exit...\n";
@@ -47,7 +49,7 @@ int main()
   }
 
   std::cout << "- Succesfully recovered.\n";
-
+  std::cin.ignore();
   do
   {
     std::cout << "\nPress enter to exit...\n";
